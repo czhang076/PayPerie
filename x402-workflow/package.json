@@ -1,0 +1,15 @@
+{
+  "name": "x402-workflow",
+  "version": "1.0.0",
+  "description": "x402 Payment Protocol - Complete Workflow Demo",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start-all.js",
+    "stop": "node scripts/stop-all.js",
+    "dev": "concurrently -n merchant,facilitator,frontend -c red,blue,green \"npm run dev --prefix x402-merchant\" \"npm run dev --prefix x402-facilitator\" \"npm run dev --prefix x402-frontend\"",
+    "install:all": "npm install && cd x402-merchant && npm install && cd ../x402-facilitator && npm install && cd ../x402-frontend && npm install && cd ../x402-agent && npm install && cd ../x402-client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

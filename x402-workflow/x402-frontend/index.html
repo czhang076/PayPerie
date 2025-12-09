@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>x402 Payment Protocol - Complete Workflow Demo</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">💳</span>
+        <div>
+          <h1>x402 Protocol</h1>
+          <p class="tagline">HTTP 402 Payment Required - 完整支付流程演示</p>
+        </div>
+      </div>
+      <div class="service-status">
+        <div class="status-item" id="status-merchant">
+          <span class="status-dot"></span>
+          <span>Merchant :3000</span>
+        </div>
+        <div class="status-item" id="status-facilitator">
+          <span class="status-dot"></span>
+          <span>Facilitator :3001</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Left Panel: Chat & Controls -->
+      <aside class="left-panel">
+        <!-- Wallet Section -->
+        <section class="panel-card">
+          <h3>👛 钱包</h3>
+          <div class="wallet-form">
+            <input type="password" id="privateKey" placeholder="输入私钥 (0x...)" />
+            <button id="connectBtn" class="btn btn-primary">连接</button>
+          </div>
+          <div id="walletInfo" class="wallet-info hidden">
+            <div class="info-item">
+              <span class="label">地址</span>
+              <span id="walletAddress" class="value mono"></span>
+            </div>
+            <div class="info-item">
+              <span class="label">USDC</span>
+              <span id="usdcBalance" class="value"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- AI Agent Chat -->
+        <section class="panel-card chat-section">
+          <h3>🤖 AI Agent</h3>
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-welcome">
+              <p>我是 x402 购物助手，可以帮你浏览和购买商品。</p>
+              <p>试试说：</p>
+              <ul>
+                <li>"有什么商品？"</li>
+                <li>"买一件T恤"</li>
+                <li>"购买牛仔裤"</li>
+              </ul>
+            </div>
+          </div>
+          <div class="chat-input-container">
+            <input type="text" id="chatInput" placeholder="输入消息..." disabled />
+            <button id="sendBtn" class="btn btn-primary" disabled>发送</button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Center: Workflow Visualization -->
+      <section class="center-panel">
+        <h2>🔄 HTTP 402 Payment Flow</h2>
+        <p class="flow-subtitle">Based on Pantera Capital x402 Protocol</p>
+        
+        <div class="workflow-diagram">
+          <!-- Row 1: User → Step 1 → Agent -->
+          <div class="flow-row">
+            <div class="entity-box entity-user" id="user-entity">
+              <span class="icon">👤</span>
+              <span class="label">User</span>
+            </div>
+            <div class="step-box" id="flow-step-1">
+              <div class="step-header">
+                <span class="step-num">1</span>
+                <span class="step-title">User Prompt</span>
+              </div>
+              <div class="step-desc">"Buy jeans from store"</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-1"></div>
+            <div class="entity-box entity-agent" id="agent-entity">
+              <span class="icon">🤖</span>
+              <span class="label">AI Agent</span>
+              <span class="sublabel">Claude / GPT</span>
+            </div>
+          </div>
+
+          <!-- Row 2: Agent → Step 2 → Merchant -->
+          <div class="flow-row">
+            <div class="entity-box" style="visibility: hidden;"></div>
+            <div class="step-box" id="flow-step-2">
+              <div class="step-header">
+                <span class="step-num">2</span>
+                <span class="step-title">HTTP Request</span>
+              </div>
+              <div class="step-desc">POST /api/buy/:id</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-2"></div>
+            <div class="entity-box entity-merchant" id="merchant-entity">
+              <span class="icon">🏪</span>
+              <span class="label">Merchant</span>
+              <span class="sublabel">:3000</span>
+            </div>
+          </div>
+
+          <!-- Row 3: Merchant → Step 3 (402 Response) -->
+          <div class="flow-row reverse">
+            <div class="entity-box" style="visibility: hidden;"></div>
+            <div class="step-box" id="flow-step-3">
+              <div class="step-header">
+                <span class="step-num">3</span>
+                <span class="step-title">402 Payment Required</span>
+              </div>
+              <div class="step-desc">Payment Challenge</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-3"></div>
+            <div class="entity-box" style="visibility: hidden;"></div>
+          </div>
+
+          <!-- Challenge Box -->
+          <div class="challenge-box" id="challengeBox">
+            <div class="challenge-header">📋 HTTP 402 - Payment Challenge</div>
+            <div class="challenge-content">
+              <div class="challenge-item">
+                <span>Merchant:</span>
+                <span id="challengeMerchant">0x...</span>
+              </div>
+              <div class="challenge-item">
+                <span>Chain:</span>
+                <span>Avalanche Fuji</span>
+              </div>
+              <div class="challenge-item">
+                <span>Asset:</span>
+                <span>USDC</span>
+              </div>
+              <div class="challenge-item">
+                <span>Amount:</span>
+                <span id="challengeAmount">0.00 USDC</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 4: Step 4 Sign Authorization -->
+          <div class="flow-row">
+            <div class="entity-box" style="visibility: hidden;"></div>
+            <div class="step-box" id="flow-step-4">
+              <div class="step-header">
+                <span class="step-num">4</span>
+                <span class="step-title">Sign Authorization</span>
+              </div>
+              <div class="step-desc">EIP-712 Signature</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-4"></div>
+            <div class="entity-box entity-facilitator" id="facilitator-entity">
+              <span class="icon">💳</span>
+              <span class="label">Facilitator</span>
+              <span class="sublabel">:3001</span>
+              <div class="facilitator-checks">
+                <div class="check-item" id="check-amount">○ Amount &lt; 100 USDC</div>
+                <div class="check-item" id="check-merchant">○ Whitelisted Merchant</div>
+                <div class="check-item" id="check-user">○ User Approval</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 5: Facilitator → Step 5 → Blockchain -->
+          <div class="flow-row">
+            <div class="entity-box" style="visibility: hidden;"></div>
+            <div class="step-box" id="flow-step-5">
+              <div class="step-header">
+                <span class="step-num">5</span>
+                <span class="step-title">Execute TX</span>
+              </div>
+              <div class="step-desc">transferWithAuthorization</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-5"></div>
+            <div class="entity-box entity-blockchain" id="blockchain-entity">
+              <span class="icon">⛓️</span>
+              <span class="label">Blockchain</span>
+              <span class="sublabel">Avalanche Fuji</span>
+            </div>
+          </div>
+
+          <!-- Row 6: TX Confirmed -->
+          <div class="flow-row reverse">
+            <div class="entity-box" style="visibility: hidden;"></div>
+            <div class="step-box" id="flow-step-6">
+              <div class="step-header">
+                <span class="step-num">6</span>
+                <span class="step-title">TX Confirmed</span>
+              </div>
+              <div class="step-desc" id="txHashDisplay">Block #...</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-6"></div>
+            <div class="entity-box" style="visibility: hidden;"></div>
+          </div>
+
+          <!-- Row 7: Confirm & Ship -->
+          <div class="flow-row">
+            <div class="entity-box" style="visibility: hidden;"></div>
+            <div class="step-box" id="flow-step-7">
+              <div class="step-header">
+                <span class="step-num">7</span>
+                <span class="step-title">Confirm &amp; Ship</span>
+              </div>
+              <div class="step-desc">Resource Delivered</div>
+              <span class="step-status"></span>
+            </div>
+            <div class="arrow" id="arrow-7"></div>
+            <div class="entity-box" style="visibility: hidden;"></div>
+          </div>
+
+          <!-- Delivery Icon -->
+          <div class="delivery-row">
+            <div class="delivery-icon" id="deliveryIcon">🚚</div>
+          </div>
+        </div>
+
+        <!-- Transaction Result -->
+        <div id="transactionResult" class="transaction-result hidden">
+          <div class="result-header">
+            <span class="result-icon">✅</span>
+            <span>交易成功</span>
+          </div>
+          <div class="result-content">
+            <div class="result-item">
+              <span class="label">商品:</span>
+              <span id="resultProduct" class="value"></span>
+            </div>
+            <div class="result-item">
+              <span class="label">金额:</span>
+              <span id="resultAmount" class="value"></span>
+            </div>
+            <div class="result-item">
+              <span class="label">交易哈希:</span>
+              <a id="resultTxHash" class="value mono" target="_blank"></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Products & Log -->
+      <aside class="right-panel">
+        <!-- Products -->
+        <section class="panel-card">
+          <h3>🛍️ 商品</h3>
+          <div id="productsList" class="products-list">
+            <p class="loading-text">连接钱包后加载...</p>
+          </div>
+        </section>
+
+        <!-- Log -->
+        <section class="panel-card log-section">
+          <h3>📝 日志</h3>
+          <div id="logContainer" class="log-container">
+            <div class="log-entry info">系统就绪，请连接钱包开始</div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

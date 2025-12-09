@@ -1,0 +1,27 @@
+{
+  "name": "x402-facilitator",
+  "version": "1.0.0",
+  "description": "x402 Payment Facilitator - Independent service for payment validation and execution",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "npx tsx src/server.ts"
+  },
+  "keywords": ["x402", "payment", "facilitator", "eip-3009", "avalanche"],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3"
+  }
+}

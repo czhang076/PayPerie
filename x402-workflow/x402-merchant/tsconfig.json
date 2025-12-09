@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    // 输出目录设置
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // 模块系统 - 使用 NodeNext 支持 ESM
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+
+    // Node.js 类型支持
+    "types": ["node"],
+    "lib": ["ES2022"],
+
+    // 输出选项
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // 严格模式
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "x402-agent",
+  "version": "1.0.0",
+  "description": "x402 AI Agent - Natural language payment interface using Claude",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "npx tsx src/index.ts",
+    "chat": "npx tsx src/chat.ts"
+  },
+  "keywords": [
+    "x402",
+    "ai-agent",
+    "claude",
+    "payment",
+    "nlp"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^17.2.3",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3"
+  }
+}
