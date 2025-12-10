@@ -33,4 +33,7 @@ export const config = {
   rpc: {
     url: getOptionalEnv('RPC_URL', 'https://api.avax-test.network/ext/bc/C/rpc'),
   },
+  contracts: {
+    vaultAddress: getRequiredEnv('VAULT_CONTRACT_ADDRESS') as `0x${string}`,
+  },
 };

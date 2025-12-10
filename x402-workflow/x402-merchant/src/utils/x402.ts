@@ -19,7 +19,7 @@ export function buildPaymentRequired(
     maxAmountRequired: amountInBaseUnits,
     resource,
     description,
-    payTo: config.merchant.address,
+    payTo: config.merchant.facilitatorAddress,
     asset: config.merchant.acceptedToken,
     maxTimeoutSeconds: DEFAULT_PAYMENT_TIMEOUT_SECONDS,
     extra,
@@ -89,7 +89,7 @@ export function validatePaymentPayload(payload: PaymentPayload): ValidationResul
     }
   }
 
-  if (auth.to.toLowerCase() !== config.merchant.address.toLowerCase()) {
+  if (auth.to.toLowerCase() !== config.merchant.facilitatorAddress.toLowerCase()) {
     return { valid: false, error: 'Recipient mismatch' };
   }
 

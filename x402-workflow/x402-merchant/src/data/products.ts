@@ -47,33 +47,36 @@ export function baseUnitsToUsd(baseUnits: string): number {
  */
 const productCatalog: Map<string, Product> = new Map([
   [
-    'jeans-501',
+    'novel-1-page-1',
     {
-      id: 'jeans-501',
-      name: "Levi's 501 Original Jeans",
-      description: 'Classic straight fit jeans with button fly',
-      priceUSD: 0.02,
-      priceInBaseUnits: usdToBaseUnits(0.02),
+      id: 'novel-1-page-1',
+      name: 'Novel One — Page 1',
+      description: 'The opening page of our serialized fiction.',
+      priceUSD: 0.01,
+      priceInBaseUnits: usdToBaseUnits(0.01),
+      authorAddress: '0x1111111111111111111111111111111111111111',
     },
   ],
   [
-    'tshirt-basic',
+    'novel-1-page-2',
     {
-      id: 'tshirt-basic',
-      name: 'Basic Cotton T-Shirt',
-      description: 'Comfortable 100% cotton t-shirt',
-      priceUSD: 0.02,
-      priceInBaseUnits: usdToBaseUnits(0.02),
+      id: 'novel-1-page-2',
+      name: 'Novel One — Page 2',
+      description: 'Continues the story with a key reveal.',
+      priceUSD: 0.01,
+      priceInBaseUnits: usdToBaseUnits(0.01),
+      authorAddress: '0x1111111111111111111111111111111111111111',
     },
   ],
   [
-    'sneakers-classic',
+    'novel-1-bundle',
     {
-      id: 'sneakers-classic',
-      name: 'Classic Canvas Sneakers',
-      description: 'Timeless canvas sneakers for everyday wear',
-      priceUSD: 0.02,
-      priceInBaseUnits: usdToBaseUnits(0.02),
+      id: 'novel-1-bundle',
+      name: 'Novel One — Pages 1-5',
+      description: 'Bundle of the first five pages.',
+      priceUSD: 0.05,
+      priceInBaseUnits: usdToBaseUnits(0.05),
+      authorAddress: '0x2222222222222222222222222222222222222222',
     },
   ],
 ]);
@@ -99,6 +102,13 @@ export function getProductById(id: string): Product | undefined {
  */
 export function getAllProducts(): Product[] {
   return Array.from(productCatalog.values());
+}
+
+/**
+ * Add or update a product in the catalog
+ */
+export function addOrUpdateProduct(product: Product): void {
+  productCatalog.set(product.id, product);
 }
 
 /**

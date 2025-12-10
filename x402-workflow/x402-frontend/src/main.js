@@ -1,14 +1,6 @@
-/**
- * x402 Frontend - HTTP 402 Payment Flow Demo
- */
-
 import { createWalletClient, createPublicClient, http, formatUnits } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { avalancheFuji } from 'viem/chains';
-
-// ============================================================================
-// Configuration
-// ============================================================================
 
 const CONFIG = {
   MERCHANT_URL: 'http://localhost:3000',
@@ -37,367 +29,308 @@ const EIP712_TYPES = {
   ],
 };
 
-// ============================================================================
-// State & DOM Elements
-// ============================================================================
-
-const state = { account: null, walletClient: null, publicClient: null, products: [], isProcessing: false };
-
-const $ = (id) => document.getElementById(id);
-const elements = {
-  privateKey: $('privateKey'), connectBtn: $('connectBtn'), walletInfo: $('walletInfo'),
-  walletAddress: $('walletAddress'), usdcBalance: $('usdcBalance'),
-  chatMessages: $('chatMessages'), chatInput: $('chatInput'), sendBtn: $('sendBtn'),
-  productsList: $('productsList'), logContainer: $('logContainer'),
-  challengeBox: $('challengeBox'), challengeMerchant: $('challengeMerchant'),
-  challengeAmount: $('challengeAmount'), txHashDisplay: $('txHashDisplay'),
-  deliveryIcon: $('deliveryIcon'), transactionResult: $('transactionResult'),
-  resultProduct: $('resultProduct'), resultAmount: $('resultAmount'), resultTxHash: $('resultTxHash'),
-  statusMerchant: $('status-merchant'), statusFacilitator: $('status-facilitator'),
+const state = {
+  account: null,
+  walletClient: null,
+  publicClient: null,
+  products: [],
+  currentBook: null,
+  currentPage: 1,
+  totalPages: 0,
 };
 
-// ============================================================================
-// Initialization
-// ============================================================================
+const $ = (id) => document.getElementById(id);
 
-document.addEventListener('DOMContentLoaded', () => {
-  elements.connectBtn.addEventListener('click', connectWallet);
-  elements.sendBtn.addEventListener('click', handleSendMessage);
-  elements.chatInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSendMessage());
-  
+const el = {
+  statusMerchant: $('status-merchant'),
+  statusFacilitator: $('status-facilitator'),
+  privateKey: $('privateKey'),
+  connectBtn: $('connectBtn'),
+  walletInfo: $('walletInfo'),
+  walletAddress: $('walletAddress'),
+  usdcBalance: $('usdcBalance'),
+  uploadForm: $('uploadForm'),
+  uploadFile: $('uploadFile'),
+  uploadTitle: $('uploadTitle'),
+  uploadPrice: $('uploadPrice'),
+  uploadAuthor: $('uploadAuthor'),
+  uploadStatus: $('uploadStatus'),
+  refreshLibrary: $('refreshLibrary'),
+  libraryList: $('libraryList'),
+  readerTitle: $('readerTitle'),
+  readerStatus: $('readerStatus'),
+  readerPage: $('readerPage'),
+  prevPage: $('prevPage'),
+  nextPage: $('nextPage'),
+  pdfViewer: $('pdfViewer'),
+  viewerPlaceholder: $('viewerPlaceholder'),
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  el.connectBtn.addEventListener('click', connectWallet);
+  el.uploadForm.addEventListener('submit', handleUpload);
+  el.refreshLibrary.addEventListener('click', fetchLibrary);
+  el.prevPage.addEventListener('click', () => changePage(-1));
+  el.nextPage.addEventListener('click', () => changePage(1));
+
   const savedKey = localStorage.getItem('x402_privateKey');
-  if (savedKey) elements.privateKey.value = savedKey;
-  
+  if (savedKey) el.privateKey.value = savedKey;
   checkServices();
   setInterval(checkServices, 10000);
 });
 
-// ============================================================================
-// Service Health Check
-// ============================================================================
-
 async function checkServices() {
-  const check = async (url, el) => {
+  const ping = async (url, target) => {
     try {
       const res = await fetch(url);
-      el.classList.toggle('online', res.ok);
-    } catch { el.classList.remove('online'); }
+      target.classList.toggle('online', res.ok);
+    } catch {
+      target.classList.remove('online');
+    }
   };
-  check(`${CONFIG.MERCHANT_URL}/health`, elements.statusMerchant);
-  check(`${CONFIG.FACILITATOR_URL}/api/merchants`, elements.statusFacilitator);
+  ping(`${CONFIG.MERCHANT_URL}/health`, el.statusMerchant);
+  ping(`${CONFIG.FACILITATOR_URL}/health`, el.statusFacilitator);
 }
 
-// ============================================================================
-// Wallet Connection
-// ============================================================================
-
 async function connectWallet() {
-  const privateKey = elements.privateKey.value.trim();
-  if (!privateKey?.match(/^0x[a-fA-F0-9]{64}$/)) {
-    return log('Invalid private key format (0x + 64 hex)', 'error');
+  const pk = el.privateKey.value.trim();
+  if (!pk.match(/^0x[a-fA-F0-9]{64}$/)) {
+    return setStatus(el.uploadStatus, '私钥格式错误 (0x + 64 hex)', true);
   }
-  
   try {
-    log('Connecting wallet...', 'info');
-    state.account = privateKeyToAccount(privateKey);
+    state.account = privateKeyToAccount(pk);
     state.publicClient = createPublicClient({ chain: avalancheFuji, transport: http() });
     state.walletClient = createWalletClient({ account: state.account, chain: avalancheFuji, transport: http() });
-    
-    localStorage.setItem('x402_privateKey', privateKey);
-    
-    const addr = state.account.address;
-    elements.walletAddress.textContent = `${addr.slice(0, 8)}...${addr.slice(-6)}`;
-    elements.walletInfo.classList.remove('hidden');
-    elements.connectBtn.textContent = 'Connected';
-    elements.connectBtn.disabled = true;
-    elements.chatInput.disabled = false;
-    elements.sendBtn.disabled = false;
-    
-    log(`✅ Wallet connected: ${addr.slice(0, 10)}...`, 'success');
-    await Promise.all([fetchUSDCBalance(), fetchProducts()]);
+    localStorage.setItem('x402_privateKey', pk);
+
+    el.walletInfo.classList.remove('hidden');
+    el.walletAddress.textContent = shorten(state.account.address);
+    await fetchUSDCBalance();
+    el.connectBtn.textContent = '已连接';
+    el.connectBtn.disabled = true;
+    el.uploadAuthor.value = state.account.address;
+    fetchLibrary();
   } catch (error) {
-    log(`❌ Connection failed: ${error.message}`, 'error');
+    setStatus(el.uploadStatus, `连接失败: ${error.message}`, true);
   }
 }
 
 async function fetchUSDCBalance() {
   if (!state.publicClient || !state.account) return;
   try {
-    const balance = await state.publicClient.readContract({
-      address: CONFIG.USDC_ADDRESS, abi: USDC_ABI,
-      functionName: 'balanceOf', args: [state.account.address],
+    const bal = await state.publicClient.readContract({
+      address: CONFIG.USDC_ADDRESS,
+      abi: USDC_ABI,
+      functionName: 'balanceOf',
+      args: [state.account.address],
     });
-    elements.usdcBalance.textContent = `${formatUnits(balance, CONFIG.USDC_DECIMALS)} USDC`;
-  } catch { elements.usdcBalance.textContent = 'Fetch failed'; }
+    el.usdcBalance.textContent = `${formatUnits(bal, CONFIG.USDC_DECIMALS)} USDC`;
+  } catch {
+    el.usdcBalance.textContent = '余额获取失败';
+  }
 }
 
-// ============================================================================
-// Products
-// ============================================================================
+function setStatus(target, msg, isError = false) {
+  if (!target) return;
+  target.textContent = msg;
+  target.style.color = isError ? '#f45d48' : '#8a93a5';
+}
 
-async function fetchProducts() {
+async function handleUpload(e) {
+  e.preventDefault();
+  if (!state.account) {
+    setStatus(el.uploadStatus, '请先连接钱包', true);
+    return;
+  }
+  const file = el.uploadFile.files?.[0];
+  const title = el.uploadTitle.value.trim();
+  const price = el.uploadPrice.value.trim();
+  const author = el.uploadAuthor.value.trim();
+  if (!file || !title || !price || !author) {
+    setStatus(el.uploadStatus, '请填写完整信息', true);
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  form.append('title', title);
+  form.append('price', price);
+  form.append('authorAddress', author);
+
+  setStatus(el.uploadStatus, '上传中...');
   try {
-    log('Fetching products...', 'info');
+    const res = await fetch(`${CONFIG.MERCHANT_URL}/api/author/upload`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    setStatus(el.uploadStatus, `已发布：${data.bookId} (${data.totalPages} 页)`);
+    await fetchLibrary();
+  } catch (error) {
+    setStatus(el.uploadStatus, `上传失败: ${error.message}`, true);
+  }
+}
+
+async function fetchLibrary() {
+  el.libraryList.innerHTML = '<p class="muted">加载中...</p>';
+  try {
     const res = await fetch(`${CONFIG.MERCHANT_URL}/api/products`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     state.products = data.data || data.products || (Array.isArray(data) ? data : []);
-    renderProducts();
-    log(`✅ Loaded ${state.products.length} products`, 'success');
+    renderLibrary();
   } catch (error) {
-    elements.productsList.innerHTML = '<p class="loading-text">❌ Cannot connect to merchant</p>';
-    log(`❌ Failed to fetch products: ${error.message}`, 'error');
+    el.libraryList.innerHTML = `<p class="muted">无法获取书库: ${error.message}</p>`;
   }
 }
 
-function renderProducts() {
+function renderLibrary() {
   if (!state.products.length) {
-    elements.productsList.innerHTML = '<p class="loading-text">No products available</p>';
+    el.libraryList.innerHTML = '<p class="muted">暂无书籍，先上传一本试试</p>';
     return;
   }
-  elements.productsList.innerHTML = state.products.map(p => {
-    const price = p.price || p.priceInBaseUnits || '0';
-    return `<div class="product-item" onclick="window.purchaseProduct('${p.id}')">
-      <span class="product-name">${p.name}</span>
-      <span class="product-price">${formatUnits(BigInt(price), CONFIG.USDC_DECIMALS)} USDC</span>
+  el.libraryList.innerHTML = state.products.map((p) => {
+    const price = p.priceInBaseUnits || p.price || '0';
+    const priceFmt = formatUnits(BigInt(price), CONFIG.USDC_DECIMALS);
+    const author = p.authorAddress ? shorten(p.authorAddress) : '未知作者';
+    const desc = p.description || '';
+    return `<div class="book-card" data-id="${p.id}">
+      <div class="book-title">${p.name}</div>
+      <div class="book-meta">
+        <span>${priceFmt} USDC / 页</span>
+        <span>${author}</span>
+      </div>
+      <div class="muted">${desc}</div>
     </div>`;
   }).join('');
+  el.libraryList.querySelectorAll('.book-card').forEach((card) => {
+    card.addEventListener('click', () => selectBook(card.dataset.id));
+  });
 }
 
-// ============================================================================
-// Chat Handler
-// ============================================================================
-
-async function handleSendMessage() {
-  const message = elements.chatInput.value.trim();
-  if (!message || state.isProcessing) return;
-  addChatMessage(message, 'user');
-  elements.chatInput.value = '';
-  await processUserMessage(message);
+function selectBook(bookId) {
+  const book = state.products.find((p) => p.id === bookId);
+  if (!book) return;
+  state.currentBook = book;
+  state.currentPage = 1;
+  el.readerTitle.textContent = book.name;
+  updatePageStatus();
+  loadPage(book.id, state.currentPage);
 }
 
-function addChatMessage(text, type) {
-  const welcome = elements.chatMessages.querySelector('.chat-welcome');
-  if (welcome) welcome.remove();
-  const div = document.createElement('div');
-  div.className = `chat-message ${type}`;
-  div.textContent = text;
-  elements.chatMessages.appendChild(div);
-  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+function updatePageStatus(locked = true, page = state.currentPage, total = state.totalPages) {
+  el.readerStatus.textContent = locked ? 'Payment Status: Locked' : 'Payment Status: Unlocked';
+  el.readerPage.textContent = total ? `Page ${page} / ${total}` : `Page ${page}`;
+  el.prevPage.disabled = page <= 1;
+  el.nextPage.disabled = total ? page >= total : false;
 }
 
-async function processUserMessage(message) {
-  const lower = message.toLowerCase();
-  
-  // List products
-  if (/product|item|what|list|show/.test(lower)) {
-    if (!state.products.length) await fetchProducts();
-    if (state.products.length) {
-      const list = state.products.map(p => `• ${p.name} - ${formatUnits(BigInt(p.price || p.priceInBaseUnits), CONFIG.USDC_DECIMALS)} USDC`).join('\n');
-      addChatMessage(`Available products:\n${list}\n\nSay "buy [product name]" to purchase`, 'assistant');
-    } else {
-      addChatMessage('Sorry, cannot fetch products. Ensure merchant server is running.', 'assistant');
-    }
+async function changePage(delta) {
+  if (!state.currentBook) return;
+  const next = Math.max(1, state.currentPage + delta);
+  state.currentPage = next;
+  updatePageStatus();
+  await loadPage(state.currentBook.id, next);
+}
+
+async function loadPage(bookId, pageNum) {
+  if (!state.account) {
+    setStatus(el.uploadStatus, '请先连接钱包', true);
     return;
   }
-  
-  // Purchase
-  if (/buy|purchase|order|get/.test(lower)) {
-    let product = state.products.find(p => lower.includes(p.id) || lower.includes(p.name.toLowerCase()));
-    if (!product) {
-      const keywords = { 'tshirt|shirt|t-shirt': 'tshirt', 'jeans|pants': 'jeans', 'jacket|coat': 'jacket', 'sneaker|shoe': 'sneaker' };
-      for (const [pattern, id] of Object.entries(keywords)) {
-        if (new RegExp(pattern).test(lower)) { product = state.products.find(p => p.id.includes(id)); break; }
-      }
-    }
-    if (product) {
-      addChatMessage(`Processing purchase for ${product.name}...`, 'assistant');
-      await executePurchase(product);
-    } else {
-      addChatMessage('Please specify a product, e.g., "buy jeans" or "purchase t-shirt"', 'assistant');
-    }
-    return;
-  }
-  
-  addChatMessage('I can help you:\n• View products - "show products"\n• Purchase - "buy jeans"', 'assistant');
-}
+  updatePageStatus(true, pageNum, state.totalPages);
+  el.viewerPlaceholder.textContent = '加载中...';
+  el.viewerPlaceholder.classList.remove('hidden');
+  el.pdfViewer.src = '';
 
-// ============================================================================
-// Purchase Flow
-// ============================================================================
-
-async function executePurchase(product) {
-  if (state.isProcessing) return;
-  state.isProcessing = true;
-  resetWorkflow();
-  elements.transactionResult.classList.add('hidden');
-  
   try {
-    // Step 1: User Prompt
-    setStepStatus(1, 'active');
-    highlightEntity('user-entity');
-    log(`👤 User request: Purchase ${product.name}`, 'info');
-    await delay(500);
-    setStepStatus(1, 'completed');
-    
-    // Step 2: HTTP Request
-    setStepStatus(2, 'active');
-    highlightEntity('agent-entity');
-    log(`🤖 AI Agent: POST /api/buy/${product.id}`, 'info');
-    const purchaseRes = await fetch(`${CONFIG.MERCHANT_URL}/api/buy/${product.id}`, { method: 'POST' });
-    setStepStatus(2, 'completed');
-    
-    // Step 3: 402 Response
-    setStepStatus(3, 'active');
-    highlightEntity('merchant-entity');
-    if (purchaseRes.status !== 402) throw new Error(`Expected 402, got ${purchaseRes.status}`);
-    
-    const response402 = await purchaseRes.json();
-    const challenge = response402.accepts?.[0] || response402;
-    log(`🏪 Merchant: 402 Payment Required`, 'info');
-    
-    elements.challengeBox.classList.add('active');
-    elements.challengeMerchant.textContent = challenge.payTo ? `${challenge.payTo.slice(0, 8)}...` : '0x...';
-    elements.challengeAmount.textContent = `${formatUnits(BigInt(challenge.maxAmountRequired || '0'), CONFIG.USDC_DECIMALS)} USDC`;
-    await delay(800);
-    setStepStatus(3, 'completed');
-    
-    // Step 4: Sign Authorization
-    setStepStatus(4, 'active');
-    highlightEntity('agent-entity');
-    log(`🔐 Signing EIP-712 authorization...`, 'info');
-    const signedPayload = await signPayment(challenge);
-    log(`✅ Signature: ${signedPayload.signature.slice(0, 16)}...`, 'success');
-    await delay(500);
-    setStepStatus(4, 'completed');
-    
-    // Step 5: Execute Transaction
-    setStepStatus(5, 'active');
-    highlightEntity('facilitator-entity');
-    log(`💳 Facilitator: Validating policies...`, 'info');
-    
-    for (const [id, text] of [['check-amount', '✓ Amount < 100 USDC'], ['check-merchant', '✓ Whitelisted Merchant'], ['check-user', '✓ User Approval']]) {
-      await delay(300);
-      $(id).classList.add('passed');
-      $(id).textContent = text;
-    }
-    
-    log(`📤 Sending to Facilitator...`, 'info');
-    const facilitatorRes = await fetch(`${CONFIG.FACILITATOR_URL}/api/pay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userAddress: state.account.address,
-        challenge: {
-          merchantAddress: challenge.payTo,
-          merchantDomain: 'localhost:3000',
-          amount: challenge.maxAmountRequired,
-          asset: challenge.asset || CONFIG.USDC_ADDRESS,
-          network: 'avalanche-fuji',
-          resource: `/api/buy/${product.id}`,
-          description: `Purchase ${product.name}`,
-          timeoutSeconds: 3600,
-        },
-        signedPayload,
-      }),
-    });
-    
-    const result = await facilitatorRes.json();
-    if (!facilitatorRes.ok) throw new Error(result.error || 'Facilitator validation failed');
-    
-    log(`⛓️ Executing on-chain transaction...`, 'info');
-    setStepStatus(5, 'completed');
-    
-    // Step 6: TX Confirmed
-    setStepStatus(6, 'active');
-    highlightEntity('blockchain-entity');
-    elements.txHashDisplay.textContent = `TX: ${result.transactionHash.slice(0, 10)}...`;
-    log(`✅ TX confirmed: ${result.transactionHash.slice(0, 20)}...`, 'success');
-    await delay(500);
-    setStepStatus(6, 'completed');
-    
-    // Step 7: Deliver Resource
-    setStepStatus(7, 'active');
-    highlightEntity('merchant-entity');
-    log(`📦 Merchant confirming order, preparing shipment...`, 'info');
-    await delay(500);
-    elements.deliveryIcon.classList.add('active');
-    setStepStatus(7, 'completed');
-    
-    // Show Result
-    elements.resultProduct.textContent = product.name;
-    elements.resultAmount.textContent = `${formatUnits(BigInt(challenge.maxAmountRequired), CONFIG.USDC_DECIMALS)} USDC`;
-    elements.resultTxHash.textContent = result.transactionHash;
-    elements.resultTxHash.href = `https://testnet.snowtrace.io/tx/${result.transactionHash}`;
-    elements.transactionResult.classList.remove('hidden');
-    
-    log(`🎉 Purchase successful! ${product.name}`, 'success');
-    addChatMessage(`✅ Purchase successful!\n\nProduct: ${product.name}\nTX: ${result.transactionHash.slice(0, 20)}...\n\nShipping soon 🚚`, 'assistant');
-    await fetchUSDCBalance();
-    
+    const blob = await fetchPageWithPaywall(bookId, pageNum);
+    const url = URL.createObjectURL(blob);
+    el.pdfViewer.src = url;
+    el.viewerPlaceholder.classList.add('hidden');
+    updatePageStatus(false, pageNum, state.totalPages);
   } catch (error) {
-    log(`❌ Purchase failed: ${error.message}`, 'error');
-    addChatMessage(`❌ Purchase failed: ${error.message}`, 'assistant');
-    document.querySelectorAll('.step-box.active').forEach(el => {
-      el.classList.replace('active', 'error');
-      el.querySelector('.step-status').textContent = '❌';
-    });
-  } finally {
-    state.isProcessing = false;
-    clearEntityHighlights();
+    el.viewerPlaceholder.textContent = `加载失败: ${error.message}`;
   }
 }
 
-// ============================================================================
-// Payment Signing
-// ============================================================================
+async function fetchPageWithPaywall(bookId, pageNum) {
+  let res = await fetch(`${CONFIG.MERCHANT_URL}/api/read/${bookId}/${pageNum}`);
+  if (res.ok) {
+    const total = res.headers.get('x-total-pages');
+    if (total) state.totalPages = Number(total);
+    return await res.blob();
+  }
 
-async function signPayment(challenge) {
+  if (res.status !== 402) {
+    const err = await safeJson(res);
+    throw new Error(err?.error || `HTTP ${res.status}`);
+  }
+
+  const challenge = await res.json();
+  const option = challenge.accepts?.[0] || challenge;
+  const payload = await signChallenge(option);
+  const header = btoa(JSON.stringify(payload));
+
+  res = await fetch(`${CONFIG.MERCHANT_URL}/api/read/${bookId}/${pageNum}`, {
+    headers: { 'X-PAYMENT': header },
+  });
+
+  if (!res.ok) {
+    const err = await safeJson(res);
+    throw new Error(err?.error || `支付失败 (HTTP ${res.status})`);
+  }
+
+  const total = res.headers.get('x-total-pages');
+  if (total) state.totalPages = Number(total);
+  return await res.blob();
+}
+
+async function signChallenge(challenge) {
   const now = Math.floor(Date.now() / 1000);
   const validAfter = BigInt(now - 60);
-  const validBefore = BigInt(now + challenge.maxTimeoutSeconds);
-  const nonce = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
-  
+  const validBefore = BigInt(now + (challenge.maxTimeoutSeconds || 3600));
+  const nonce = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
+
   const message = {
     from: state.account.address,
     to: challenge.payTo,
     value: BigInt(challenge.maxAmountRequired),
-    validAfter, validBefore, nonce,
+    validAfter,
+    validBefore,
+    nonce,
   };
-  
+
   const signature = await state.walletClient.signTypedData({
     domain: { name: 'USD Coin', version: '2', chainId: CONFIG.CHAIN_ID, verifyingContract: CONFIG.USDC_ADDRESS },
     types: EIP712_TYPES,
     primaryType: 'TransferWithAuthorization',
     message,
   });
-  
+
   return {
-    signature,
-    authorization: {
-      from: state.account.address, to: challenge.payTo,
-      value: message.value.toString(), validAfter: validAfter.toString(),
-      validBefore: validBefore.toString(), nonce,
+    x402Version: challenge.x402Version || 1,
+    scheme: challenge.scheme || 'exact',
+    network: challenge.network || 'avalanche-fuji',
+    payload: {
+      signature,
+      authorization: {
+        from: state.account.address,
+        to: challenge.payTo,
+        value: message.value.toString(),
+        validAfter: validAfter.toString(),
+        validBefore: validBefore.toString(),
+        nonce,
+      },
     },
   };
 }
 
-// ============================================================================
-// Workflow Visualization
-// ============================================================================
+function shorten(addr) {
+  if (!addr) return '';
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
 
-function resetWorkflow() {
-  for (let i = 1; i <= 7; i++) {
-    const step = $(`flow-step-${i}`);
-    if (step) { step.classList.remove('active', 'completed', 'error'); step.querySelector('.step-status').textContent = ''; }
-    const arrow = $(`arrow-${i}`);
-    if (arrow) arrow.classList.remove('active', 'completed');
-  }
-  elements.challengeBox.classList.remove('active');
-  elements.challengeMerchant.textContent = '0x...';
-  elements.challengeAmount.textContent = '0.00 USDC';
-  
-  ['check-amount', 'check-merchant', 'check-user'].forEach((id, i) => {
+async function safeJson(res) {
+  try { return await res.json(); } catch { return null; }
+}
     const el = $(id);
     el.classList.remove('passed');
     el.textContent = ['○ Amount < 100 USDC', '○ Whitelisted Merchant', '○ User Approval'][i];

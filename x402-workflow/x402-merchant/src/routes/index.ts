@@ -1,6 +1,13 @@
-/**
- * @fileoverview Routes Module Index
- * @description Re-exports all route modules
- */
+import { Router } from 'express';
+import paymentRoutes from './paymentRoutes.js';
+import authorRoutes from './authorRoutes.js';
+import readRoutes from './readRoutes.js';
 
-export { default as apiRoutes } from './paymentRoutes.js';
+const router = Router();
+
+router.use('/', paymentRoutes);
+router.use('/author', authorRoutes);
+router.use('/read', readRoutes);
+
+export const apiRoutes = router;
+export default router;

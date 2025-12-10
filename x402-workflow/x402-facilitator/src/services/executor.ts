@@ -11,6 +11,8 @@ import type { PaymentRequest, PaymentResult } from '../types/index.js';
 
 const USDC_ABI = [
   { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+  { name: 'allowance', type: 'function', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+  { name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
   { name: 'transferWithAuthorization', type: 'function', stateMutability: 'nonpayable',
     inputs: [
       { name: 'from', type: 'address' }, { name: 'to', type: 'address' }, { name: 'value', type: 'uint256' },
@@ -19,6 +21,19 @@ const USDC_ABI = [
     ], outputs: [] },
   { name: 'authorizationState', type: 'function', stateMutability: 'view',
     inputs: [{ name: 'authorizer', type: 'address' }, { name: 'nonce', type: 'bytes32' }], outputs: [{ name: '', type: 'bool' }] },
+] as const;
+
+const VAULT_ABI = [
+  {
+    name: 'settlePayment',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'author', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
 ] as const;
 
 const getEIP712Domain = (chainId: number, usdcAddress: Address) => ({
@@ -37,13 +52,17 @@ export class PaymentExecutor {
   private walletClient;
   private usdcAddress: Address;
   private chainId: number;
+  private vaultAddress: Address;
+  private facilitatorAddress: Address;
 
   constructor() {
     this.chainId = CHAIN_IDS[NETWORKS.AVALANCHE_FUJI];
     this.usdcAddress = USDC_ADDRESSES[NETWORKS.AVALANCHE_FUJI];
+    this.vaultAddress = config.contracts.vaultAddress;
     this.publicClient = createPublicClient({ chain: avalancheFuji, transport: http(config.rpc.url) });
     const account = privateKeyToAccount(config.facilitator.privateKey);
     this.walletClient = createWalletClient({ account, chain: avalancheFuji, transport: http(config.rpc.url) });
+    this.facilitatorAddress = account.address;
     console.log(`[Executor] Account: ${account.address}`);
   }
 
@@ -109,21 +128,65 @@ export class PaymentExecutor {
     const v = parseInt(signature.slice(130, 132), 16);
 
     try {
-      const hash = await this.walletClient.writeContract({
-        address: this.usdcAddress, abi: USDC_ABI, functionName: 'transferWithAuthorization',
-        args: [authorization.from, authorization.to, amount, validAfter, validBefore, authorization.nonce, v, r, s]
+      // Step 1: Collect funds to facilitator via transferWithAuthorization
+      const collectHash = await this.walletClient.writeContract({
+        address: this.usdcAddress,
+        abi: USDC_ABI,
+        functionName: 'transferWithAuthorization',
+        args: [authorization.from, authorization.to, amount, validAfter, validBefore, authorization.nonce, v, r, s],
       });
-      console.log(`[Executor] TX submitted: ${hash}`);
-
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
-      if (receipt.status === 'success') {
-        console.log(`[Executor] Confirmed in block ${receipt.blockNumber}`);
-        return {
-          success: true, transactionHash: hash,
-          details: { from: authorization.from, to: authorization.to, amount: authorization.value, network: NETWORKS.AVALANCHE_FUJI }
-        };
+      console.log(`[Executor] Collect TX submitted: ${collectHash}`);
+      const collectReceipt = await this.publicClient.waitForTransactionReceipt({ hash: collectHash });
+      if (collectReceipt.status !== 'success') {
+        return { success: false, error: 'Collect transaction reverted', errorCode: 'TRANSACTION_FAILED', transactionHash: collectHash };
       }
-      return { success: false, error: 'Transaction reverted', errorCode: 'TRANSACTION_FAILED', transactionHash: hash };
+
+      // Step 2: Approve vault if needed
+      const currentAllowance: bigint = await this.publicClient.readContract({
+        address: this.usdcAddress,
+        abi: USDC_ABI,
+        functionName: 'allowance',
+        args: [this.facilitatorAddress, this.vaultAddress],
+      });
+
+      const needsApproval = currentAllowance < amount;
+      if (needsApproval) {
+        const approveHash = await this.walletClient.writeContract({
+          address: this.usdcAddress,
+          abi: USDC_ABI,
+          functionName: 'approve',
+          args: [this.vaultAddress, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')],
+        });
+        console.log(`[Executor] Approve TX submitted: ${approveHash}`);
+        const approveReceipt = await this.publicClient.waitForTransactionReceipt({ hash: approveHash });
+        if (approveReceipt.status !== 'success') {
+          return { success: false, error: 'Approve transaction reverted', errorCode: 'TRANSACTION_FAILED', transactionHash: approveHash };
+        }
+      }
+
+      // Step 3: Settle to vault using authorAddress from challenge
+      const authorAddress = request.challenge.extra?.authorAddress;
+      if (!authorAddress) {
+        return { success: false, error: 'Missing author address', errorCode: 'TRANSACTION_FAILED' };
+      }
+
+      const settleHash = await this.walletClient.writeContract({
+        address: this.vaultAddress,
+        abi: VAULT_ABI,
+        functionName: 'settlePayment',
+        args: [authorAddress, amount],
+      });
+      console.log(`[Executor] Settle TX submitted: ${settleHash}`);
+      const settleReceipt = await this.publicClient.waitForTransactionReceipt({ hash: settleHash });
+      if (settleReceipt.status !== 'success') {
+        return { success: false, error: 'Settlement reverted', errorCode: 'TRANSACTION_FAILED', transactionHash: settleHash };
+      }
+
+      return {
+        success: true,
+        transactionHash: settleHash,
+        details: { from: authorization.from, to: this.vaultAddress, amount: authorization.value, network: NETWORKS.AVALANCHE_FUJI },
+      };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[Executor] Failed: ${msg}`);

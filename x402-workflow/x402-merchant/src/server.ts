@@ -19,6 +19,7 @@ app.listen(port, () => {
 ╠═══════════════════════════════════════════════════════════╣
 ║  GET  /health          GET  /api/products                 ║
 ║  GET  /api/products/:id POST /api/buy/:id (x402)          ║
+║  POST /api/author/upload  GET /api/read/:book/:page       ║
 ╚═══════════════════════════════════════════════════════════╝
 `);
 });

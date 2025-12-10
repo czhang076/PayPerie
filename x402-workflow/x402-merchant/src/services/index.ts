@@ -6,3 +6,4 @@
 
 export { PaymentFacilitator, getFacilitator } from './facilitator.js';
 export type { FacilitatorResult, VerificationResult } from './facilitator.js';
+export * as contentService from './contentService.js';

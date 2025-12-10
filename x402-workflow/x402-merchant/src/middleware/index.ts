@@ -5,3 +5,4 @@
 
 export { requestLogger } from './logger.js';
 export { AppError, notFoundHandler, errorHandler } from './errorHandler.js';
+export { paywall } from './paywall.js';

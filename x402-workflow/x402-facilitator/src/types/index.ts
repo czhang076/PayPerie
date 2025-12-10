@@ -82,6 +82,10 @@ export interface PaymentRequest {
     resource: string;
     description: string;
     timeoutSeconds: number;
+    extra?: {
+      authorAddress?: `0x${string}`;
+      [key: string]: unknown;
+    };
   };
   
   /** Signed payment payload from user */

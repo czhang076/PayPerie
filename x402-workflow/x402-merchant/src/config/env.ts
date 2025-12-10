@@ -16,6 +16,8 @@ dotenv.config();
 export interface MerchantConfig {
   /** Merchant wallet address to receive payments */
   address: string;
+  /** Facilitator wallet address that receives user payments */
+  facilitatorAddress: string;
   /** Merchant private key for signing transactions (Facilitator) */
   privateKey: string;
   /** Accepted token contract address (e.g., USDC) */
@@ -99,6 +101,7 @@ export const config: AppConfig = {
   },
   merchant: {
     address: getRequiredEnv('MERCHANT_WALLET_ADDRESS'),
+    facilitatorAddress: getRequiredEnv('FACILITATOR_WALLET_ADDRESS'),
     privateKey: getRequiredEnv('PRIVATE_KEY'),
     acceptedToken: getOptionalEnv(
       'ACCEPTED_TOKEN_ADDRESS',
@@ -124,6 +127,13 @@ function isValidAddress(address: string): boolean {
 if (!isValidAddress(config.merchant.address)) {
   throw new Error(
     `❌ Invalid MERCHANT_WALLET_ADDRESS: ${config.merchant.address}\n` +
+    `   Must be a valid Ethereum address (0x followed by 40 hex characters).`
+  );
+}
+
+if (!isValidAddress(config.merchant.facilitatorAddress)) {
+  throw new Error(
+    `❌ Invalid FACILITATOR_WALLET_ADDRESS: ${config.merchant.facilitatorAddress}\n` +
     `   Must be a valid Ethereum address (0x followed by 40 hex characters).`
   );
 }

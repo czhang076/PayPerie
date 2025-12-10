@@ -64,6 +64,7 @@ export interface PaymentRequirement {
     productId?: string;
     productName?: string;
     orderId?: string;
+    authorAddress?: string;
     [key: string]: unknown;
   };
 }
@@ -199,6 +200,9 @@ export interface Product {
   
   /** Price in base units (e.g., "50000000" for 50 USDC) */
   priceInBaseUnits: string;
+
+  /** Author wallet address to receive settlement in vault */
+  authorAddress: string;
 }
 
 /**
